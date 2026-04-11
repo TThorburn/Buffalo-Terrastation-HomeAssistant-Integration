@@ -1,5 +1,22 @@
-type: markdown
-content: >
-  **Storage Used** {{
-  state_attr('sensor.buffalo_terastation_nas_buffalo_raid_usage', 'usage_text')
-  }}
+type: custom:mushroom-template-card
+primary: Storage
+secondary: >
+  {{ state_attr('sensor.buffalo_terastation_nas_buffalo_raid_usage',
+  'usage_text') }}
+icon: mdi:harddisk
+icon_color: >
+  {% set pct = states('sensor.buffalo_terastation_nas_buffalo_raid_usage') |
+  float(0) %} {% if pct > 90 %}
+    red
+  {% elif pct > 75 %}
+    amber
+  {% else %}
+    green
+  {% endif %}
+layout: horizontal
+entity: sensor.buffalo_terastation_nas_buffalo_raid_usage
+tap_action:
+  action: more-info
+grid_options:
+  columns: 12
+  rows: 1
