@@ -3,8 +3,6 @@
 </p>
 
 # Buffalo TeraStation NAS
-
-# Buffalo-Terrastation-HomeAssistant-Integration
 Custom NAS integration for Buffalo Terrastation NAS
 
 ## Tested Devices
