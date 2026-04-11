@@ -17,6 +17,12 @@ icon_color: >
   {% else %}
     green
   {% endif %}
+entity: binary_sensor.buffalo_raid_problem
+
+layout: horizontal        # ✅ forces slim banner layout
+
+layout_options:
+  column_span: 2          # ✅ spans both grid columns
+
 tap_action:
   action: more-info
-entity: binary_sensor.buffalo_raid_problem
