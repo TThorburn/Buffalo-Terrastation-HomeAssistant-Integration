@@ -12,10 +12,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
         [
             BuffaloCpuUsage(coordinator),
             BuffaloMemoryUsage(coordinator),
-            BuffaloRaidUsedPct(coordinator),
+            BuffaloRaidUsage(coordinator),
             BuffaloEth0RxBytes(coordinator),
             BuffaloEth0TxBytes(coordinator),
-        ]
+        ],
+        update_before_add=True,
     )
 
 
@@ -56,23 +57,47 @@ class BuffaloMemoryUsage(CoordinatorEntity, SensorEntity):
 
 
 # ==========================================================
-# RAID USAGE
+# RAID USAGE (BUFFALO-STYLE PRESENTATION)
 # ==========================================================
 
-class BuffaloRaidUsedPct(CoordinatorEntity, SensorEntity):
-    _attr_name = "Buffalo RAID Used %"
-    _attr_unique_id = "buffalo_raid_used_pct"
+class BuffaloRaidUsage(CoordinatorEntity, SensorEntity):
+    """
+    RAID usage presented like the Buffalo web UI:
+    - State: % used
+    - Attributes: used GB, total GB, "X GB / Y GB" text
+    """
+
+    _attr_name = "Buffalo RAID Usage"
+    _attr_unique_id = "buffalo_raid_usage"
     _attr_unit_of_measurement = "%"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:chart-donut"
 
-    @property
-    def native_value(self):
-        array = next(
+    def _array(self):
+        return next(
             d for d in self.coordinator.data["devices"]
             if d["device_type"] == "array"
         )
-        return array["used_percentage"]
+
+    @property
+    def native_value(self):
+        array = self._array()
+        return round(array["used_percentage"], 2)
+
+    @property
+    def extra_state_attributes(self):
+        array = self._array()
+
+        # Buffalo reports sizes in MB → convert to GB
+        used_gb = array["used_size"] / 1024
+        total_gb = array["total_size"] / 1024
+
+        return {
+            "used_gb": round(used_gb, 1),
+            "total_gb": round(total_gb, 1),
+            "usage_text": f"{round(used_gb, 1)} GB / {round(total_gb, 1)} GB",
+            "raid_level": array.get("raid_level"),
+        }
 
     @property
     def device_info(self):
