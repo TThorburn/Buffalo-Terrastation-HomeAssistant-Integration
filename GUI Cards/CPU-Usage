@@ -1,0 +1,10 @@
+# Uses Mini Graph Card
+type: custom:mini-graph-card
+name: CPU Usage
+entities:
+  - sensor.buffalo_cpu_usage_avg
+line_width: 3
+hours_to_show: 12
+points_per_hour: 4
+show:
+  fill: true
