@@ -1,5 +1,5 @@
 type: custom:mushroom-template-card
-# Change Disk number for each disk
+# Change Disk number for each disk required
 primary: Disk 4
 secondary: >
   {% if is_state('binary_sensor.buffalo_disk1_problem', 'on') %}
