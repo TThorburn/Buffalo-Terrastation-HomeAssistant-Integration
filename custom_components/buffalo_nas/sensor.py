@@ -8,20 +8,20 @@ from .device import buffalo_device_info
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
-    entities = [
-        BuffaloCpuUsage(coordinator),
-        BuffaloMemoryUsage(coordinator),
-        BuffaloRaidUsedPct(coordinator),
-        BuffaloEth0RxBytes(coordinator),
-        BuffaloEth0TxBytes(coordinator),
-    ]
+    async_add_entities(
+        [
+            BuffaloCpuUsage(coordinator),
+            BuffaloMemoryUsage(coordinator),
+            BuffaloRaidUsedPct(coordinator),
+            BuffaloEth0RxBytes(coordinator),
+            BuffaloEth0TxBytes(coordinator),
+        ]
+    )
 
-    async_add_entities(entities)
 
-
-# ------------------------------------------------------------
-# CPU / MEMORY
-# ------------------------------------------------------------
+# ==========================================================
+# CPU & MEMORY
+# ==========================================================
 
 class BuffaloCpuUsage(CoordinatorEntity, SensorEntity):
     _attr_name = "Buffalo CPU Usage"
@@ -55,9 +55,9 @@ class BuffaloMemoryUsage(CoordinatorEntity, SensorEntity):
         return buffalo_device_info(self.coordinator.host)
 
 
-# ------------------------------------------------------------
+# ==========================================================
 # RAID USAGE
-# ------------------------------------------------------------
+# ==========================================================
 
 class BuffaloRaidUsedPct(CoordinatorEntity, SensorEntity):
     _attr_name = "Buffalo RAID Used %"
@@ -79,9 +79,9 @@ class BuffaloRaidUsedPct(CoordinatorEntity, SensorEntity):
         return buffalo_device_info(self.coordinator.host)
 
 
-# ------------------------------------------------------------
+# ==========================================================
 # NETWORK
-# ------------------------------------------------------------
+# ==========================================================
 
 class BuffaloEth0RxBytes(CoordinatorEntity, SensorEntity):
     _attr_name = "Buffalo eth0 RX Bytes"
