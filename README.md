@@ -16,5 +16,7 @@ This integration has been tested on the following Buffalo NAS devices:
 
 Other TeraStation models using the same web UI and JSON‑RPC API may work but are untested.
 
-Card details found
+## UI Examples
+
+Card details found in GUI Cards Folder
 <img width="1376" height="1048" alt="image" src="https://github.com/user-attachments/assets/fa10b39a-f31e-4ee1-9658-27e777379876" />
