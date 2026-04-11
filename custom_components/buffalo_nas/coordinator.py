@@ -1,4 +1,5 @@
 from datetime import timedelta
+import logging
 import aiohttp
 
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -7,9 +8,13 @@ from homeassistant.core import HomeAssistant
 from .client import BuffaloNASClient
 from .const import DOMAIN, DEFAULT_SCAN_INTERVAL
 
+_LOGGER = logging.getLogger(__name__)
+
 
 class BuffaloNASCoordinator(DataUpdateCoordinator):
     def __init__(self, hass: HomeAssistant, config, options):
+        self.host = config["host"]
+
         self.client = BuffaloNASClient(
             config["host"],
             config["username"],
@@ -20,6 +25,7 @@ class BuffaloNASCoordinator(DataUpdateCoordinator):
 
         super().__init__(
             hass,
+            _LOGGER,                    # ✅ REQUIRED NOW
             name=DOMAIN,
             update_interval=timedelta(seconds=scan_interval),
         )
