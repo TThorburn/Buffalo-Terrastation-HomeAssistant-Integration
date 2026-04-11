@@ -1,0 +1,20 @@
+type: custom:mushroom-template-card
+# Change Disk number for each disk
+primary: Disk 4
+secondary: >
+  {% if is_state('binary_sensor.buffalo_disk1_problem', 'on') %}
+    Problem
+  {% else %}
+    Healthy
+  {% endif %}
+icon: mdi:harddisk
+icon_color: >
+  {% if is_state('binary_sensor.buffalo_disk1_problem', 'on') %}
+    red
+  {% else %}
+    green
+  {% endif %}
+# Change Disk number for each disk (buffalo_disk#_problem)
+entity: binary_sensor.buffalo_disk4_problem
+tap_action:
+  action: more-info
