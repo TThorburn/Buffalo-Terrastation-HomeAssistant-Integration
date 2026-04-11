@@ -1,7 +1,7 @@
 {
   "domain": "buffalo_nas",
   "name": "Buffalo TeraStation NAS",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "documentation": "https://github.com/TThorburn/Buffalo-Terrastation-HomeAssistant-Integration",
   "config_flow": true,
   "iot_class": "local_polling",
