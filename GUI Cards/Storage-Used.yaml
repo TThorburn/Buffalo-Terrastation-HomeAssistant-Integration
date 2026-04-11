@@ -1,0 +1,5 @@
+type: markdown
+content: >
+  **Storage Used** {{
+  state_attr('sensor.buffalo_terastation_nas_buffalo_raid_usage', 'usage_text')
+  }}
