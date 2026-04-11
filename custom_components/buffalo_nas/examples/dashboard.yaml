@@ -1,0 +1,37 @@
+title: Buffalo NAS
+views:
+  - title: Overview
+    path: overview
+    icon: mdi:nas
+    cards:
+      - type: entities
+        title: RAID & Disk Health
+        entities:
+          - binary_sensor.buffalo_raid_problem
+          - binary_sensor.buffalo_raid_degraded
+          - binary_sensor.buffalo_disk_disk1_problem
+          - binary_sensor.buffalo_disk_disk2_problem
+          - binary_sensor.buffalo_disk_disk3_problem
+          - binary_sensor.buffalo_disk_disk4_problem
+
+      - type: gauge
+        name: RAID Usage
+        entity: sensor.buffalo_raid_used_pct
+        min: 0
+        max: 100
+        severity:
+          green: 0
+          yellow: 70
+          red: 90
+
+      - type: entities
+        title: Performance
+        entities:
+          - sensor.buffalo_cpu_usage
+          - sensor.buffalo_memory_usage
+
+      - type: entities
+        title: Network
+        entities:
+          - sensor.buffalo_eth0_rx_bytes
+          - sensor.buffalo_eth0_tx_bytes
