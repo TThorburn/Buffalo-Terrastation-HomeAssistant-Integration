@@ -1,0 +1,27 @@
+type: custom:mushroom-template-card
+primary: Memory
+secondary: |
+  {{
+    (
+      states('sensor.buffalo_terastation_nas_buffalo_memory_usage') | float(0)
+      * states('input_number.buffalo_total_ram_gb') | float(0)
+      / 100
+    ) | round(2)
+  }} GB / {{ states('input_number.buffalo_total_ram_gb') | float(0) }} GB
+icon: mdi:memory
+icon_color: >
+  {% set mem = states('sensor.buffalo_terastation_nas_buffalo_memory_usage') |
+  float(0) %} {% if mem > 90 %}
+    red
+  {% elif mem > 70 %}
+    amber
+  {% else %}
+    green
+  {% endif %}
+layout: horizontal
+entity: sensor.buffalo_terastation_nas_buffalo_memory_usage
+tap_action:
+  action: more-info
+grid_options:
+  columns: 12
+  rows: 1
