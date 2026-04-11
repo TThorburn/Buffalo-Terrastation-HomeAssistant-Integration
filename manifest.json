@@ -1,0 +1,10 @@
+{
+  "domain": "buffalo_nas",
+  "name": "Buffalo TeraStation NAS",
+  "version": "1.0.0",
+  "documentation": "https://github.com/you/buffalo_nas",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": [],
+  "iot_class": "local_polling"
+}

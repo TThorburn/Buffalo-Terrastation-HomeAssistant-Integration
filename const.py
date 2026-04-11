@@ -1,0 +1,7 @@
+DOMAIN = "buffalo_nas"
+
+DEFAULT_SCAN_INTERVAL = 60  # seconds
+MIN_SCAN_INTERVAL = 10
+MAX_SCAN_INTERVAL = 3600
+
+NASAPI_PATH = "/nasapi/"

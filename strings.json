@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Buffalo TeraStation NAS",
+        "description": "Connect to your Buffalo NAS using its native JSON‑RPC API.",
+        "data": {
+          "host": "NAS IP address",
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Buffalo NAS Options",
+        "description": "Adjust how often Home Assistant polls the NAS.",
+        "data": {
+          "scan_interval": "Scan interval (seconds)"
+        }
+      }
+    }
+  }
+}
