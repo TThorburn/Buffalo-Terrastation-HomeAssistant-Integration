@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="images/icon.png" width="128" alt="Buffalo TeraStation NAS">
+</p>
+
+# Buffalo TeraStation NAS
+
 # Buffalo-Terrastation-HomeAssistant-Integration
 Custom NAS integration for Buffalo Terrastation NAS
 
