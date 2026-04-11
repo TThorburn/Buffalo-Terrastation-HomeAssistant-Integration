@@ -1,0 +1,22 @@
+type: custom:mushroom-template-card
+primary: RAID Status
+secondary: >
+  {% if is_state('binary_sensor.buffalo_raid_problem', 'on') %}
+    Problem detected
+  {% elif is_state('binary_sensor.buffalo_raid_degraded', 'on') %}
+    Degraded / rebuilding
+  {% else %}
+    Healthy
+  {% endif %}
+icon: mdi:harddisk
+icon_color: >
+  {% if is_state('binary_sensor.buffalo_raid_problem', 'on') %}
+    red
+  {% elif is_state('binary_sensor.buffalo_raid_degraded', 'on') %}
+    amber
+  {% else %}
+    green
+  {% endif %}
+tap_action:
+  action: more-info
+entity: binary_sensor.buffalo_raid_problem
