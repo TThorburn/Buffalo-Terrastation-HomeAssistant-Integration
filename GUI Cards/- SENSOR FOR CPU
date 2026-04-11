@@ -1,7 +1,12 @@
+# -------------------------------------------------------------------
+# Sensors
+# -------------------------------------------------------------------
 sensor:
+  # CPU – rolling average for readable stats
+  # Used alongside raw CPU for spiky graphs
   - platform: statistics
     name: Buffalo CPU Usage (Avg)
-    entity_id: sensor.buffalo_cpu_usage
+    entity_id: sensor.buffalo_terastation_nas_buffalo_cpu_usage
     state_characteristic: mean
     max_age:
       minutes: 5
