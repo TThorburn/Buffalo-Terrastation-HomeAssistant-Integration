@@ -1,7 +1,7 @@
 type: gauge
 name: RAID Usage
 entity: sensor.buffalo_terastation_nas_buffalo_raid_usage
-min: 00
+min: 0
 max: 100
 severity:
   green: 0
