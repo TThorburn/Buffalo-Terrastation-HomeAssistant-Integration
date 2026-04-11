@@ -5,44 +5,96 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
+from .device import buffalo_device_info
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    coord = hass.data[DOMAIN][entry.entry_id]
+    coordinator = hass.data[DOMAIN][entry.entry_id]
     entities = []
 
-    for d in coord.data["devices"]:
-        if d["device_type"] == "disk" and d["interface"] == "sata":
-            entities.append(BuffaloDiskHealth(coord, d))
-        elif d["device_type"] == "array":
-            entities.append(BuffaloRaidHealth(coord, d))
+    for device in coordinator.data["devices"]:
+        if device["device_type"] == "disk" and device["interface"] == "sata":
+            entities.append(BuffaloDiskProblem(coordinator, device))
+
+        elif device["device_type"] == "array":
+            entities.append(BuffaloRaidProblem(coordinator, device))
+            entities.append(BuffaloRaidDegraded(coordinator, device))
 
     async_add_entities(entities)
 
 
-class BuffaloDiskHealth(CoordinatorEntity, BinarySensorEntity):
+# ==========================================================
+# PRIMARY AUTOMATION SENSORS (PROBLEM = TRUE)
+# ==========================================================
+
+class BuffaloDiskProblem(CoordinatorEntity, BinarySensorEntity):
+    """ON when the disk has a problem."""
+
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_icon = "mdi:harddisk-alert"
 
     def __init__(self, coordinator, disk):
         super().__init__(coordinator)
-        self.disk = disk
-        self._attr_name = f"Buffalo {disk['device_file']} Healthy"
-        self._attr_unique_id = f"buffalo_disk_{disk['device_file']}"
+        self._disk = disk
+        self._attr_name = f"Buffalo {disk['device_file']} Problem"
+        self._attr_unique_id = f"buffalo_disk_{disk['device_file']}_problem"
 
     @property
     def is_on(self):
-        return self.disk["status"] == ["fine"]
+        return self._disk.get("status") != ["fine"]
+
+    @property
+    def available(self):
+        return self.coordinator.last_update_success
+
+    @property
+    def device_info(self):
+        return buffalo_device_info(self.coordinator.host)
 
 
-class BuffaloRaidHealth(CoordinatorEntity, BinarySensorEntity):
+class BuffaloRaidProblem(CoordinatorEntity, BinarySensorEntity):
+    """ON when RAID is not healthy."""
+
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    _attr_name = "Buffalo RAID Healthy"
-    _attr_unique_id = "buffalo_raid_healthy"
+    _attr_icon = "mdi:shield-alert"
+    _attr_name = "Buffalo RAID Problem"
+    _attr_unique_id = "buffalo_raid_problem"
 
     def __init__(self, coordinator, array):
         super().__init__(coordinator)
-        self.array = array
+        self._array = array
 
     @property
     def is_on(self):
-        return self.array["status"] == ["fine"]
+        return self._array.get("status") != ["fine"]
+
+    @property
+    def available(self):
+        return self.coordinator.last_update_success
+
+    @property
+    def device_info(self):
+        return buffalo_device_info(self.coordinator.host)
+
+
+# ==========================================================
+# FRIENDLY UI SENSOR
+# ==========================================================
+
+class BuffaloRaidDegraded(CoordinatorEntity, BinarySensorEntity):
+    """
+    Human-friendly RAID degraded indicator.
+    ON when RAID is degraded / rebuilding / failed.
+    """
+
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_icon = "mdi:harddisk-alert"
+    _attr_name = "Buffalo RAID Degraded"
+    _attr_unique_id = "buffalo_raid_degraded"
+
+    def __init__(self, coordinator, array):
+        super().__init__(coordinator)
+        self._array = array
+
+    @property
+    def is_on(self):
