@@ -1,10 +1,28 @@
-# Uses Mini Graph Card
 type: custom:mini-graph-card
 name: CPU Usage
 entities:
-  - sensor.buffalo_cpu_usage_avg
+  - entity: sensor.buffalo_cpu_usage
+    name: Raw
+    show_line: true
+    show_points: false
+  - entity: sensor.buffalo_cpu_usage_avg
+    name: Avg
+    show_line: false
+    show_points: false
+hours_to_show: 6
+points_per_hour: 12
 line_width: 3
-hours_to_show: 12
-points_per_hour: 4
 show:
+  state: false
+  average: true
+  extrema: true
   fill: true
+  legend: false
+color_thresholds:
+  - value: 0
+    color: "#2ecc71"
+  - value: 70
+    color: "#f1c40f"
+  - value: 90
+    color: "#e74c3c"
+lower_bound: 0
