@@ -1,0 +1,7 @@
+{
+  "name": "Buffalo TeraStation NAS",
+  "content_in_root": false,
+  "domain": "buffalo_nas",
+  "render_readme": true,
+  "logo": "images/icon.png"
+}
