@@ -1,0 +1,25 @@
+{
+  "title": "Buffalo TeraStation NAS",
+
+  "entity": {
+    "binary_sensor": {
+      "buffalo_raid_problem": {
+        "name": "RAID Problem"
+      },
+      "buffalo_raid_degraded": {
+        "name": "RAID Degraded"
+      }
+    },
+    "sensor": {
+      "buffalo_cpu_usage": {
+        "name": "CPU Usage"
+      },
+      "buffalo_memory_usage": {
+        "name": "Memory Usage"
+      },
+      "buffalo_raid_used_pct": {
+        "name": "RAID Used (%)"
+      }
+    }
+  }
+}
