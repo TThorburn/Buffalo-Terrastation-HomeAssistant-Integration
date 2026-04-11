@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/icon.png" width="128" alt="Buffalo TeraStation NAS">
+  <img src="images/icon.png" width="120" alt="Buffalo TeraStation NAS">
 </p>
 
 # Buffalo TeraStation NAS
