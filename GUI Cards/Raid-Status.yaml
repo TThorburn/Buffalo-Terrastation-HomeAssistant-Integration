@@ -1,6 +1,6 @@
 type: custom:mushroom-template-card
 primary: RAID Status
-secondary: >
+secondary: |
   {% if is_state('binary_sensor.buffalo_raid_problem', 'on') %}
     Problem detected
   {% elif is_state('binary_sensor.buffalo_raid_degraded', 'on') %}
@@ -9,7 +9,7 @@ secondary: >
     Healthy
   {% endif %}
 icon: mdi:harddisk
-icon_color: >
+icon_color: |
   {% if is_state('binary_sensor.buffalo_raid_problem', 'on') %}
     red
   {% elif is_state('binary_sensor.buffalo_raid_degraded', 'on') %}
@@ -18,11 +18,9 @@ icon_color: >
     green
   {% endif %}
 entity: binary_sensor.buffalo_raid_problem
-
-layout: horizontal        # ✅ forces slim banner layout
-
-layout_options:
-  column_span: 2          # ✅ spans both grid columns
-
+layout: horizontal
 tap_action:
   action: more-info
+grid_options:
+  rows: 1
+  columns: 12
