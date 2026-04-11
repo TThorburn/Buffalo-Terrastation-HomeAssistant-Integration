@@ -1,0 +1,7 @@
+sensor:
+  - platform: statistics
+    name: Buffalo CPU Usage (Avg)
+    entity_id: sensor.buffalo_cpu_usage
+    state_characteristic: mean
+    max_age:
+      minutes: 5
