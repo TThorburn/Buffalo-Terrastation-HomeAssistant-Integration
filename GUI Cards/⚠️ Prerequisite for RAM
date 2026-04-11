@@ -1,0 +1,20 @@
+⚠️ Prerequisite – Required Helper
+This card requires a Number helper to define the total RAM size of the NAS.
+The Buffalo API only exposes memory percentage, so total RAM must be declared manually.
+Create the helper in Home Assistant:
+
+Go to Settings → Devices & Services → Helpers
+Click Add helper → Number
+Configure it exactly as follows:
+
+Name:          Buffalo Total RAM (GB)
+Icon:          mdi:numeric
+Initial value: 1
+Minimum value: 0
+Maximum value: 4
+Step:          0.1
+Mode:          Slider
+Managed via UI: Yes
+
+This helper will create:
+input_number.buffalo_total_ram_gb
