@@ -98,3 +98,20 @@ class BuffaloRaidDegraded(CoordinatorEntity, BinarySensorEntity):
 
     @property
     def is_on(self):
+        return self._array.get("status") != ["fine"]
+
+    @property
+    def available(self):
+        return self.coordinator.last_update_success
+
+    @property
+    def extra_state_attributes(self):
+        return {
+            "raw_status": self._array.get("status"),
+            "raid_level": self._array.get("raid_level"),
+            "disk_count": self._array.get("raid_devices"),
+        }
+
+    @property
+    def device_info(self):
+        return buffalo_device_info(self.coordinator.host)
