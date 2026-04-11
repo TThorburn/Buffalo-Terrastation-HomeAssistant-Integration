@@ -24,23 +24,24 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 
 # ==========================================================
-# PRIMARY AUTOMATION SENSORS (PROBLEM = TRUE)
+# DISK PROBLEM SENSORS
 # ==========================================================
 
 class BuffaloDiskProblem(CoordinatorEntity, BinarySensorEntity):
     """ON when the disk has a problem."""
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    _attr_icon = "mdi:harddisk-alert"
+    _attr_icon = "mdi:harddisk"
 
     def __init__(self, coordinator, disk):
         super().__init__(coordinator)
         self._disk = disk
         self._attr_name = f"Buffalo {disk['device_file']} Problem"
-        self._attr_unique_id = f"buffalo_disk_{disk['device_file']}_problem"
+        self._attr_unique_id = f"buffalo_{disk['device_file']}_problem"
 
     @property
     def is_on(self):
+        # PROBLEM semantics: True == problem exists
         return self._disk.get("status") != ["fine"]
 
     @property
@@ -48,9 +49,21 @@ class BuffaloDiskProblem(CoordinatorEntity, BinarySensorEntity):
         return self.coordinator.last_update_success
 
     @property
+    def extra_state_attributes(self):
+        return {
+            "model": self._disk.get("unit_name"),
+            "interface": self._disk.get("interface"),
+            "raw_status": self._disk.get("status"),
+        }
+
+    @property
     def device_info(self):
         return buffalo_device_info(self.coordinator.host)
 
+
+# ==========================================================
+# RAID PROBLEM (AUTOMATION-GRADE)
+# ==========================================================
 
 class BuffaloRaidProblem(CoordinatorEntity, BinarySensorEntity):
     """ON when RAID is not healthy."""
@@ -73,22 +86,26 @@ class BuffaloRaidProblem(CoordinatorEntity, BinarySensorEntity):
         return self.coordinator.last_update_success
 
     @property
+    def extra_state_attributes(self):
+        return {
+            "raw_status": self._array.get("status"),
+            "raid_level": self._array.get("raid_level"),
+        }
+
+    @property
     def device_info(self):
         return buffalo_device_info(self.coordinator.host)
 
 
 # ==========================================================
-# FRIENDLY UI SENSOR
+# RAID DEGRADED (FRIENDLY UI SENSOR)
 # ==========================================================
 
 class BuffaloRaidDegraded(CoordinatorEntity, BinarySensorEntity):
-    """
-    Human-friendly RAID degraded indicator.
-    ON when RAID is degraded / rebuilding / failed.
-    """
+    """Friendly RAID degraded indicator."""
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    _attr_icon = "mdi:harddisk-alert"
+    _attr_icon = "mdi:alert"
     _attr_name = "Buffalo RAID Degraded"
     _attr_unique_id = "buffalo_raid_degraded"
 
