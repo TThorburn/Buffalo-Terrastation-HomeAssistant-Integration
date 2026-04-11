@@ -57,14 +57,22 @@ class BuffaloMemoryUsage(CoordinatorEntity, SensorEntity):
 
 
 # ==========================================================
-# RAID USAGE (BUFFALO-STYLE PRESENTATION)
+# RAID USAGE (BUFFALO-WEB-UI STYLE, ALL RAID LEVELS)
 # ==========================================================
 
 class BuffaloRaidUsage(CoordinatorEntity, SensorEntity):
     """
-    RAID usage presented like the Buffalo web UI:
-    - State: % used
-    - Attributes: used GB, total GB, "X GB / Y GB" text
+    RAID usage sensor with full RAID level support.
+    Matches Buffalo web UI presentation:
+
+    - State: Percentage used
+    - Attributes:
+        * used_gb
+        * total_gb
+        * usage_text (e.g. "1265.8 GB / 7385.7 GB")
+        * raid_level (human readable)
+        * redundancy_disks
+        * disk_count
     """
 
     _attr_name = "Buffalo RAID Usage"
@@ -79,6 +87,19 @@ class BuffaloRaidUsage(CoordinatorEntity, SensorEntity):
             if d["device_type"] == "array"
         )
 
+    def _raid_info(self, raid_level):
+        """Map RAID level to display name and redundancy."""
+        mapping = {
+            "0":  ("RAID 0", 0),
+            "1":  ("RAID 1", 1),
+            "5":  ("RAID 5", 1),
+            "6":  ("RAID 6", 2),
+            "10": ("RAID 10", 1),
+            "linear": ("JBOD", 0),
+            None: ("Single Disk", 0),
+        }
+        return mapping.get(str(raid_level), (f"RAID {raid_level}", None))
+
     @property
     def native_value(self):
         array = self._array()
@@ -88,15 +109,23 @@ class BuffaloRaidUsage(CoordinatorEntity, SensorEntity):
     def extra_state_attributes(self):
         array = self._array()
 
-        # Buffalo reports sizes in MB → convert to GB
+        # Buffalo API reports sizes in MB → convert to GB
         used_gb = array["used_size"] / 1024
         total_gb = array["total_size"] / 1024
 
+        raid_label, redundancy = self._raid_info(array.get("raid_level"))
+
         return {
+            # Capacity (Buffalo-style)
             "used_gb": round(used_gb, 1),
             "total_gb": round(total_gb, 1),
             "usage_text": f"{round(used_gb, 1)} GB / {round(total_gb, 1)} GB",
-            "raid_level": array.get("raid_level"),
+
+            # RAID details
+            "raid_level_raw": array.get("raid_level"),
+            "raid_level": raid_label,
+            "redundancy_disks": redundancy,
+            "disk_count": array.get("raid_devices"),
         }
 
     @property
