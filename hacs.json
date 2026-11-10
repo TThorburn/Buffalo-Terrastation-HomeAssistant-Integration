@@ -3,5 +3,6 @@
   "content_in_root": false,
   "domain": "buffalo_nas",
   "render_readme": true,
-  "logo": "images/icon.png"
+  "logo": "images/icon.png",
+  "homeassistant": "2024.12.0"
 }

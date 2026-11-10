@@ -1,0 +1,50 @@
+.nas-tile {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: .85rem;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  font-size: .875rem;
+}
+
+.nas-heading, .nas-section-title, .nas-row, .nas-legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .65rem;
+}
+
+.nas-heading {
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.nas-section {
+  display: flex;
+  flex-direction: column;
+  gap: .45rem;
+  padding-top: .65rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+}
+
+.nas-section-title {
+  font-weight: 600;
+}
+
+.nas-muted {
+  opacity: .73;
+  font-size: .75rem;
+}
+
+.nas-number {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.nas-heading h2, .nas-section h3, .nas-section p, .nas-tile p {
+  margin: 0;
+  font-size: inherit;
+}

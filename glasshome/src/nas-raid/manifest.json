@@ -1,0 +1,93 @@
+{
+  "name": "NAS RAID & Drives",
+  "description": "Buffalo RAID health, array usage, and per-drive health and capacity.",
+  "icon": "mdi:harddisk",
+  "minSize": {
+    "w": 3,
+    "h": 4
+  },
+  "maxSize": {
+    "w": 12,
+    "h": 8
+  },
+  "defaultSize": {
+    "w": 4,
+    "h": 4
+  },
+  "sdkVersion": "^1.23.1",
+  "capabilities": [
+    {
+      "domain": "sensor",
+      "access": "read"
+    },
+    {
+      "domain": "binary_sensor",
+      "access": "read"
+    }
+  ],
+  "version": "0.1.0",
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "title": {
+        "title": "Title",
+        "description": "Optional display name override",
+        "type": "string"
+      },
+      "usage": {
+        "default": [],
+        "domain": "sensor",
+        "title": "RAID usage percentage",
+        "singleSelect": true,
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "problem": {
+        "default": [],
+        "domain": "binary_sensor",
+        "title": "RAID problem",
+        "singleSelect": true,
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "degraded": {
+        "default": [],
+        "domain": "binary_sensor",
+        "title": "RAID degraded (optional)",
+        "singleSelect": true,
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "drives": {
+        "default": [],
+        "domain": "binary_sensor",
+        "title": "Individual drive problem sensors",
+        "description": "Select one problem sensor for each physical drive in this array.",
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "usage",
+      "problem",
+      "degraded",
+      "drives"
+    ],
+    "additionalProperties": false
+  },
+  "defaultConfig": {
+    "usage": [],
+    "problem": [],
+    "degraded": [],
+    "drives": []
+  }
+}

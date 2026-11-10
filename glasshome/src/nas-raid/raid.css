@@ -1,0 +1,56 @@
+.nas-status {
+  flex: none;
+  min-width: 4.3rem;
+  padding: .18rem .35rem;
+  text-align: center;
+  font-size: .68rem;
+  font-weight: 650;
+  border-radius: .5rem;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.nas-status[data-tone="good"] { background: oklch(.67 .15 151 / .19); }
+.nas-status[data-tone="warn"] { background: oklch(.68 .19 45 / .26); }
+
+.nas-drives {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.nas-drive {
+  padding: .32rem .4rem;
+  border-radius: .45rem;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+
+.nas-drive-name {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.nas-drive-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nas-capacity {
+  appearance: none;
+  border: 0;
+  border-radius: 1rem;
+  width: 100%;
+  height: .4rem;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  overflow: hidden;
+}
+
+.nas-capacity::-webkit-progress-bar { background: transparent; }
+.nas-capacity::-webkit-progress-value { background: oklch(.68 .15 245); }
+.nas-capacity::-moz-progress-bar { background: oklch(.68 .15 245); }

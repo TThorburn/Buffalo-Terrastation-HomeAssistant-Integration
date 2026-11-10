@@ -1,24 +1,53 @@
 {
   "title": "Buffalo TeraStation NAS",
-
-  "entity": {
-    "binary_sensor": {
-      "buffalo_raid_problem": {
-        "name": "RAID Problem"
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to a Buffalo TeraStation",
+        "description": "Enter the address of the NAS web interface. Use the full URL for HTTP or a custom port.",
+        "data": {
+          "host": "NAS address or URL",
+          "password": "Password",
+          "username": "Username",
+          "verify_ssl": "Verify HTTPS certificate"
+        }
       },
-      "buffalo_raid_degraded": {
-        "name": "RAID Degraded"
+      "reconfigure": {
+        "title": "Reconfigure Buffalo TeraStation",
+        "description": "Enter the new connection settings and the NAS password.",
+        "data": {
+          "host": "NAS address or URL",
+          "password": "Password",
+          "username": "Username",
+          "verify_ssl": "Verify HTTPS certificate"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Sign in to Buffalo TeraStation",
+        "description": "Enter the current credentials for this NAS.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        }
       }
     },
-    "sensor": {
-      "buffalo_cpu_usage": {
-        "name": "CPU Usage"
-      },
-      "buffalo_memory_usage": {
-        "name": "Memory Usage"
-      },
-      "buffalo_raid_used_pct": {
-        "name": "RAID Used (%)"
+    "error": {
+      "cannot_connect": "Could not read monitoring data from the NAS. Check the address, protocol, certificate and account permissions.",
+      "invalid_auth": "The NAS rejected the credentials.",
+      "invalid_host": "Enter a hostname, IP address, or HTTP(S) URL without a path."
+    },
+    "abort": {
+      "already_configured": "This NAS is already configured.",
+      "unique_id_mismatch": "The address did not return the serial number of the configured NAS."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Buffalo NAS polling",
+        "data": {
+          "scan_interval": "Scan interval (seconds)"
+        }
       }
     }
   }

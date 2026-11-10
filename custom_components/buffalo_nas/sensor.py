@@ -1,177 +1,228 @@
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+"""Utilization, capacity, network counters and NAS events."""
 
-from .const import DOMAIN
-from .device import buffalo_device_info
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
+
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+    SensorStateClass,
+)
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfInformation
+
+from .entity import BuffaloEntity, discover_entities
+from .models import Snapshot, arrays, number, percentage
+
+KIB_PER_GIB = 1024 * 1024
+RAID_LEVELS = {
+    "0": ("RAID 0", 0),
+    "1": ("RAID 1", 1),
+    "5": ("RAID 5", 1),
+    "6": ("RAID 6", 2),
+    "10": ("RAID 10", 1),
+    "linear": ("JBOD", 0),
+}
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+def gib(value: Any) -> float | None:
+    parsed = number(value)
+    return round(parsed / KIB_PER_GIB, 1) if parsed is not None else None
 
-    async_add_entities(
-        [
-            BuffaloCpuUsage(coordinator),
-            BuffaloMemoryUsage(coordinator),
-            BuffaloRaidUsage(coordinator),
-            BuffaloEth0RxBytes(coordinator),
-            BuffaloEth0TxBytes(coordinator),
-        ],
-        update_before_add=True,
+
+def raid_usage(record: dict[str, Any]) -> float | None:
+    used = percentage(record.get("used_percentage"))
+    if used is None:
+        size = number(record.get("used_size"))
+        total = number(record.get("total_size"))
+        if size is not None and total:
+            used = percentage(size / total * 100)
+    return round(used, 2) if used is not None else None
+
+
+def raid_attributes(record: dict[str, Any]) -> dict[str, Any]:
+    """Keep the original dashboard attributes and use the firmware's KiB scale."""
+    used = gib(record.get("used_size"))
+    total = gib(record.get("total_size"))
+    raw_level = record.get("raid_level")
+    level, redundancy = RAID_LEVELS.get(
+        str(raw_level).lower(),
+        (f"RAID {raw_level}", None) if raw_level is not None else (None, None),
     )
+    return {
+        "used_gb": used,
+        "total_gb": total,
+        "usage_text": f"{used} GB / {total} GB"
+        if used is not None and total is not None
+        else None,
+        "raid_level_raw": raw_level,
+        "raid_level": level,
+        "redundancy_disks": redundancy,
+        "disk_count": record.get("raid_devices"),
+    }
 
 
-# ==========================================================
-# CPU & MEMORY
-# ==========================================================
+def received(record: dict[str, Any]) -> int | float | None:
+    for key in ("recevied_bytes", "received_bytes", "rx_bytes"):
+        if (value := number(record.get(key))) is not None:
+            return value
+    return None
 
-class BuffaloCpuUsage(CoordinatorEntity, SensorEntity):
-    _attr_name = "Buffalo CPU Usage"
-    _attr_unique_id = "buffalo_cpu_usage"
-    _attr_unit_of_measurement = "%"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_icon = "mdi:cpu-64-bit"
+
+@dataclass(frozen=True, kw_only=True)
+class Metric(SensorEntityDescription):
+    """A value and its Home Assistant metadata."""
+
+    value: Callable[[Any], Any]
+    attributes: Callable[[Any], dict[str, Any]] | None = None
+
+
+CPU = Metric(
+    key="cpu_usage",
+    name="CPU Usage",
+    icon="mdi:cpu-64-bit",
+    native_unit_of_measurement=PERCENTAGE,
+    state_class=SensorStateClass.MEASUREMENT,
+    value=lambda data: percentage(data.get("cpu_usage_rate")),
+)
+MEMORY = Metric(
+    key="memory_usage",
+    name="Memory Usage",
+    icon="mdi:memory",
+    native_unit_of_measurement=PERCENTAGE,
+    state_class=SensorStateClass.MEASUREMENT,
+    value=lambda data: percentage(data.get("mem_usage_rate")),
+)
+RAID_USAGE = Metric(
+    key="usage",
+    name="Usage",
+    icon="mdi:chart-donut",
+    native_unit_of_measurement=PERCENTAGE,
+    state_class=SensorStateClass.MEASUREMENT,
+    value=raid_usage,
+    attributes=raid_attributes,
+)
+RAID_USED = Metric(
+    key="used",
+    name="Used Space",
+    device_class=SensorDeviceClass.DATA_SIZE,
+    native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
+    state_class=SensorStateClass.MEASUREMENT,
+    value=lambda data: gib(data.get("used_size")),
+)
+RAID_TOTAL = Metric(
+    key="total",
+    name="Capacity",
+    device_class=SensorDeviceClass.DATA_SIZE,
+    native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
+    state_class=SensorStateClass.MEASUREMENT,
+    value=lambda data: gib(data.get("total_size")),
+)
+RX = Metric(
+    key="rx_bytes",
+    name="RX Bytes",
+    icon="mdi:download-network",
+    device_class=SensorDeviceClass.DATA_SIZE,
+    native_unit_of_measurement=UnitOfInformation.BYTES,
+    state_class=SensorStateClass.TOTAL_INCREASING,
+    value=received,
+)
+TX = Metric(
+    key="tx_bytes",
+    name="TX Bytes",
+    icon="mdi:upload-network",
+    device_class=SensorDeviceClass.DATA_SIZE,
+    native_unit_of_measurement=UnitOfInformation.BYTES,
+    state_class=SensorStateClass.TOTAL_INCREASING,
+    value=lambda data: number(data.get("sent_bytes", data.get("tx_bytes"))),
+)
+EVENTS = Metric(
+    key="information",
+    name="NAS Information Count",
+    icon="mdi:information-outline",
+    entity_category=EntityCategory.DIAGNOSTIC,
+    value=len,
+)
+
+
+class BuffaloSensor(BuffaloEntity, SensorEntity):
+    """Read one measurement from the latest coordinator snapshot."""
+
+    entity_description: Metric
+
+    def __init__(
+        self,
+        coordinator,
+        metric: Metric,
+        source: Callable[[Snapshot], Any],
+        prefix: str = "",
+        label: str = "",
+    ) -> None:
+        super().__init__(coordinator, f"{prefix}{metric.key}", f"{label}{metric.name}")
+        self.entity_description = metric
+        self._source = source
 
     @property
     def native_value(self):
-        return self.coordinator.data["cpu"]["cpu_usage_rate"]
+        data = self._source(self.coordinator.data)
+        return self.entity_description.value(data) if data is not None else None
 
     @property
-    def device_info(self):
-        return buffalo_device_info(self.coordinator.host)
-
-
-class BuffaloMemoryUsage(CoordinatorEntity, SensorEntity):
-    _attr_name = "Buffalo Memory Usage"
-    _attr_unique_id = "buffalo_memory_usage"
-    _attr_unit_of_measurement = "%"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_icon = "mdi:memory"
-
-    @property
-    def native_value(self):
-        return self.coordinator.data["cpu"]["mem_usage_rate"]
-
-    @property
-    def device_info(self):
-        return buffalo_device_info(self.coordinator.host)
-
-
-# ==========================================================
-# RAID USAGE (BUFFALO-WEB-UI STYLE, ALL RAID LEVELS)
-# ==========================================================
-
-class BuffaloRaidUsage(CoordinatorEntity, SensorEntity):
-    """
-    RAID usage sensor with full RAID level support.
-    Matches Buffalo web UI presentation:
-
-    - State: Percentage used
-    - Attributes:
-        * used_gb
-        * total_gb
-        * usage_text (e.g. "1265.8 GB / 7385.7 GB")
-        * raid_level (human readable)
-        * redundancy_disks
-        * disk_count
-    """
-
-    _attr_name = "Buffalo RAID Usage"
-    _attr_unique_id = "buffalo_raid_usage"
-    _attr_unit_of_measurement = "%"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_icon = "mdi:chart-donut"
-
-    def _array(self):
-        return next(
-            d for d in self.coordinator.data["devices"]
-            if d["device_type"] == "array"
-        )
-
-    def _raid_info(self, raid_level):
-        """Map RAID level to display name and redundancy."""
-        mapping = {
-            "0":  ("RAID 0", 0),
-            "1":  ("RAID 1", 1),
-            "5":  ("RAID 5", 1),
-            "6":  ("RAID 6", 2),
-            "10": ("RAID 10", 1),
-            "linear": ("JBOD", 0),
-            None: ("Single Disk", 0),
-        }
-        return mapping.get(str(raid_level), (f"RAID {raid_level}", None))
-
-    @property
-    def native_value(self):
-        array = self._array()
-        return round(array["used_percentage"], 2)
+    def available(self) -> bool:
+        return super().available and self.native_value is not None
 
     @property
     def extra_state_attributes(self):
-        array = self._array()
-
-        # Buffalo API reports sizes in MB → convert to GB
-        used_gb = array["used_size"] / 1024
-        total_gb = array["total_size"] / 1024
-
-        raid_label, redundancy = self._raid_info(array.get("raid_level"))
-
-        return {
-            # Capacity (Buffalo-style)
-            "used_gb": round(used_gb, 1),
-            "total_gb": round(total_gb, 1),
-            "usage_text": f"{round(used_gb, 1)} GB / {round(total_gb, 1)} GB",
-
-            # RAID details
-            "raid_level_raw": array.get("raid_level"),
-            "raid_level": raid_label,
-            "redundancy_disks": redundancy,
-            "disk_count": array.get("raid_devices"),
-        }
-
-    @property
-    def device_info(self):
-        return buffalo_device_info(self.coordinator.host)
+        data = self._source(self.coordinator.data)
+        attributes = self.entity_description.attributes
+        return attributes(data) if attributes is not None and data is not None else None
 
 
-# ==========================================================
-# NETWORK
-# ==========================================================
+async def async_setup_entry(hass, entry, async_add_entities) -> None:
+    """Discover interfaces and arrays as the NAS reports them."""
+    coordinator = entry.runtime_data
 
-class BuffaloEth0RxBytes(CoordinatorEntity, SensorEntity):
-    _attr_name = "Buffalo eth0 RX Bytes"
-    _attr_unique_id = "buffalo_eth0_rx_bytes"
-    _attr_unit_of_measurement = "B"
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_icon = "mdi:download-network"
+    def entities():
+        data = coordinator.data
+        for metric in (CPU, MEMORY):
+            yield (
+                BuffaloSensor(coordinator, metric, lambda snapshot: snapshot.usage),
+                f"buffalo_{metric.key}",
+            )
+        if data.information is not None:
+            yield (
+                BuffaloSensor(
+                    coordinator, EVENTS, lambda snapshot: snapshot.information
+                ),
+                None,
+            )
+        for index, key in enumerate(arrays(data)):
+            label = data.devices[key].get("device_name") or f"RAID {key}"
+            for metric in (RAID_USAGE, RAID_USED, RAID_TOTAL):
+                yield (
+                    BuffaloSensor(
+                        coordinator,
+                        metric,
+                        lambda snap, key=key: (snap.devices or {}).get(key),
+                        f"array:{key}:",
+                        f"{label} ",
+                    ),
+                    "buffalo_raid_usage"
+                    if index == 0 and metric is RAID_USAGE
+                    else None,
+                )
+        for key in data.interfaces or {}:
+            for metric in (RX, TX):
+                yield (
+                    BuffaloSensor(
+                        coordinator,
+                        metric,
+                        lambda snap, key=key: (snap.interfaces or {}).get(key),
+                        f"network:{key}:",
+                        f"{key} ",
+                    ),
+                    f"buffalo_{key}_{metric.key}" if key == "eth0" else None,
+                )
 
-    @property
-    def native_value(self):
-        iface = next(
-            i for i in self.coordinator.data["network"]
-            if i["name"] == "eth0"
-        )
-        return int(iface["recevied_bytes"])
-
-    @property
-    def device_info(self):
-        return buffalo_device_info(self.coordinator.host)
-
-
-class BuffaloEth0TxBytes(CoordinatorEntity, SensorEntity):
-    _attr_name = "Buffalo eth0 TX Bytes"
-    _attr_unique_id = "buffalo_eth0_tx_bytes"
-    _attr_unit_of_measurement = "B"
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_icon = "mdi:upload-network"
-
-    @property
-    def native_value(self):
-        iface = next(
-            i for i in self.coordinator.data["network"]
-            if i["name"] == "eth0"
-        )
-        return int(iface["sent_bytes"])
-
-    @property
-    def device_info(self):
-        return buffalo_device_info(self.coordinator.host)
+    discover_entities(entry, "sensor", async_add_entities, entities)

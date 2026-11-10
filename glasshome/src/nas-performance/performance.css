@@ -1,0 +1,48 @@
+.nas-tile {
+  --nas-primary: oklch(.69 .17 150);
+  --nas-secondary: oklch(.69 .16 246);
+}
+
+.nas-chart {
+  display: block;
+  height: clamp(2.3rem, 8vh, 3.6rem);
+  width: 100%;
+}
+
+.nas-chart-empty {
+  display: grid;
+  place-items: center;
+  opacity: .73;
+  font-size: .75rem;
+}
+
+.nas-trace, .nas-grid {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.nas-trace {
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nas-grid { stroke: currentColor; opacity: .13; }
+.nas-primary { stroke: var(--nas-primary); }
+.nas-secondary { stroke: var(--nas-secondary); }
+
+.nas-series {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.nas-series i {
+  display: block;
+  width: .48rem;
+  height: .48rem;
+  border-radius: 50%;
+}
