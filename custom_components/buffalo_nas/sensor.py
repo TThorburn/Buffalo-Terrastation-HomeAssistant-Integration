@@ -161,6 +161,10 @@ class BuffaloSensor(BuffaloEntity, SensorEntity):
     ) -> None:
         super().__init__(coordinator, f"{prefix}{metric.key}", f"{label}{metric.name}")
         self.entity_description = metric
+        # Preserve each monitoring sample even when CPU, RAM or counters are flat.
+        self._attr_force_update = metric.key in {
+            "cpu_usage", "memory_usage", "rx_bytes", "tx_bytes"
+        }
         self._source = source
 
     @property

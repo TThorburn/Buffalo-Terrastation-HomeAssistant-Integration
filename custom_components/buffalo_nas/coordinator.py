@@ -51,7 +51,7 @@ class BuffaloNASCoordinator(DataUpdateCoordinator[Snapshot]):
             update_interval=timedelta(
                 seconds=entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
             ),
-            always_update=False,
+            always_update=True,
         )
         self.client = make_client(hass, entry.data)
         identifier = entry.data.get(

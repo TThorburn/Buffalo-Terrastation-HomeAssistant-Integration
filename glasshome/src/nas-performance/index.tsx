@@ -2,11 +2,11 @@ import {
   defineConfig, defineWidget, field, Icon, trackEntityHistory, untrackEntityHistory,
   useEntity, useEntityHistory, Widget, type Infer, type WidgetManifest,
 } from "@glasshome/widget-sdk";
-import { createEffect, createMemo, createSignal, onCleanup, onMount, Show, type Accessor } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup, onMount, Show, untrack, type Accessor } from "solid-js";
 
 import { compactNumber, nonnegative, percent } from "../format";
 import manifest from "./manifest.json";
-import { historyPoints, line, type Point } from "./history";
+import { chartStart, historyPoints, line, mergeSamples, type Point, type Sample } from "./history";
 import "../tile.css";
 import "./performance.css";
 
@@ -23,22 +23,55 @@ const configSchema = defineConfig({
 
 type Config = Infer<typeof configSchema>;
 
-function series(id: Accessor<string>, start: Accessor<number>, counter = false) {
+function series(id: Accessor<string>, now: Accessor<number>, counter = false) {
   const current = useEntity(id);
   const history = useEntityHistory(id);
+  const [samples, setSamples] = createSignal<Sample[]>([]);
+  const [requestFailed, setRequestFailed] = createSignal(false);
   createEffect(() => {
     const selected = id();
+    setSamples([]);
+    setRequestFailed(false);
     if (!selected) return;
-    void trackEntityHistory(selected, {
+    let active = true;
+    void untrack(() => trackEntityHistory(selected, {
       startTime: new Date((Date.now() / 1000 - WINDOW) * 1000),
       includeStartTimeState: true,
       significantChangesOnly: false,
       minimalResponse: true,
       noAttributes: true,
-    }).catch(() => undefined);
-    onCleanup(() => untrackEntityHistory(selected));
+    })).then((result) => {
+      if (active) setRequestFailed(!!result.error);
+    }).catch(() => {
+      if (active) setRequestFailed(true);
+    });
+    onCleanup(() => {
+      active = false;
+      untrackEntityHistory(selected);
+    });
   });
-  return { current, points: createMemo(() => historyPoints(history()?.timeline ?? [], start(), counter)) };
+  createEffect(() => {
+    const selected = id();
+    const entity = current();
+    if (!selected || !entity) return;
+    const timestamp = entity.lastUpdated.getTime() / 1000;
+    if (!Number.isFinite(timestamp)) return;
+    setSamples((previous) => mergeSamples(
+      [...previous, { timestamp, state: entity.state }],
+      untrack(now) - WINDOW,
+    ));
+  });
+  const readings = createMemo(() => mergeSamples(
+    [...(history()?.timeline ?? []), ...samples()], now() - WINDOW,
+  ));
+  return {
+    current,
+    failed: () => requestFailed() || !!history()?.error,
+    recorded: () => historyPoints(readings(), now() - WINDOW, counter),
+    points: createMemo(() => historyPoints(
+      readings(), now() - WINDOW, counter, now(),
+    )),
+  };
 }
 
 function chartStats(points: Point[]) {
@@ -80,17 +113,24 @@ function Chart(props: {
   primary: Point[];
   secondary: Point[];
 }) {
+  const start = () => chartStart([props.primary, props.secondary], props.start, props.end);
+  const timeLabel = (time: number) => new Date(time * 1000).toLocaleTimeString([], {
+    hour: "2-digit", minute: "2-digit",
+  });
   return (
+    <>
     <Show
       when={[props.primary, props.secondary].some((points) => points.some(({ value }) => value !== undefined))}
       fallback={<div class="nas-chart nas-chart-empty">Waiting for history</div>}
     >
       <svg class="nas-chart" viewBox="0 0 300 52" preserveAspectRatio="none" role="img" aria-label={props.label}>
         <path class="nas-grid" d="M0,2 H300 M0,26 H300 M0,50 H300" />
-        <path class="nas-trace nas-primary" d={line(props.primary, props.start, props.end, props.max)} />
-        <path class="nas-trace nas-secondary" d={line(props.secondary, props.start, props.end, props.max)} />
+        <path class="nas-trace nas-primary" d={line(props.primary, start(), props.end, props.max)} />
+        <path class="nas-trace nas-secondary" d={line(props.secondary, start(), props.end, props.max)} />
       </svg>
     </Show>
+    <div class="nas-row nas-muted nas-number"><span>{timeLabel(start())}</span><span>{timeLabel(props.end)}</span></div>
+    </>
   );
 }
 
@@ -102,11 +142,11 @@ function Performance(props: { config: Config }) {
     onCleanup(() => clearInterval(timer));
   });
 
-  const cpu = series(() => props.config.cpu?.[0] ?? "", start);
-  const memory = series(() => props.config.memory?.[0] ?? "", start);
-  const rx = series(() => props.config.rx?.[0] ?? "", start, true);
-  const tx = series(() => props.config.tx?.[0] ?? "", start, true);
-  const stats = createMemo(() => chartStats(cpu.points()));
+  const cpu = series(() => props.config.cpu?.[0] ?? "", now);
+  const memory = series(() => props.config.memory?.[0] ?? "", now);
+  const rx = series(() => props.config.rx?.[0] ?? "", now, true);
+  const tx = series(() => props.config.tx?.[0] ?? "", now, true);
+  const stats = createMemo(() => chartStats(cpu.recorded()));
   const chartEnd = () => Math.max(
     now(),
     cpu.points().at(-1)?.time ?? 0,
@@ -126,13 +166,14 @@ function Performance(props: { config: Config }) {
           <Icon icon="mdi:chart-line" width={22} />
         </header>
         <section class="nas-section">
-          <div class="nas-section-title"><h3>CPU &amp; Memory</h3><span class="nas-muted">Last {HOURS} h</span></div>
+          <div class="nas-section-title"><h3>CPU &amp; Memory</h3><span class="nas-muted">Up to {HOURS} h</span></div>
           <Show when={hasProcessor()} fallback={<p class="nas-muted">Select CPU and memory sensors in widget settings.</p>}>
             <div class="nas-legend">
               <PercentReading label="CPU" color="var(--nas-primary)" value={percent(cpu.current()?.state)} />
               <PercentReading label="RAM" color="var(--nas-secondary)" value={percent(memory.current()?.state)} />
             </div>
             <Chart label="CPU and memory utilization history" start={start()} end={chartEnd()} max={100} primary={cpu.points()} secondary={memory.points()} />
+            <Show when={cpu.failed() || memory.failed()}><p class="nas-muted">Recorded history unavailable. Showing live updates while this tile is open.</p></Show>
             <Show when={stats()}>
               {(summary) => <div class="nas-row nas-muted nas-number">
                 <span>CPU min {compactNumber(summary().min)}%</span>
@@ -150,6 +191,7 @@ function Performance(props: { config: Config }) {
               <Throughput label="TX" color="var(--nas-secondary)" points={tx.points()} available={nonnegative(tx.current()?.state) !== undefined} />
             </div>
             <Chart label="Receive and transmit throughput history" start={start()} end={chartEnd()} max={rateScale()} primary={rx.points()} secondary={tx.points()} />
+            <Show when={rx.failed() || tx.failed()}><p class="nas-muted">Recorded history unavailable. Throughput needs two live counter updates.</p></Show>
           </Show>
         </section>
       </Widget.Content>

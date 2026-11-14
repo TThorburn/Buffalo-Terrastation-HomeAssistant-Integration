@@ -1,6 +1,6 @@
 # Buffalo NAS widgets for GlassHome
 
-**NAS Performance** shows current CPU and RAM usage, a six-hour chart for both, and CPU sample minimum, average, and maximum. The network chart shows average receive and transmit rates between recorded byte-counter samples. A reset, wrap, or unavailable reading leaves a gap.
+**NAS Performance** shows current CPU and RAM usage, up to six hours of history for both, and CPU sample minimum, average, and maximum. Charts expand the available time range as readings arrive. Unchanged percentage readings continue as flat lines. The network chart shows average receive and transmit rates between byte-counter updates. A reset, wrap, or unavailable reading leaves a gap.
 
 **NAS RAID & Drives** shows the array’s health, usage, and capacity. Each selected drive has its own row with health and capacity. Add one widget per array if your NAS has multiple arrays.
 
@@ -22,7 +22,11 @@ npm.cmd exec --yes --package=bun -- bun run widget connect http://homeassistant.
 | NAS Performance | CPU Usage, Memory Usage, and RX Bytes and TX Bytes for the active network port. On the inspected NAS this is `eth1` (LAN 2). |
 | NAS RAID & Drives | RAID Usage and RAID Problem for the same array, optionally RAID Degraded, then the individual SATA drive Problem entities. On the inspected NAS the array is `md10`. |
 
-Keep these sensors in Home Assistant Recorder to populate the charts. Network throughput needs at least two valid counter samples. Individual drive capacities display in decimal GB or TB, while array usage displays in GiB.
+Keep these sensors in Home Assistant Recorder to populate history after a page reload. The widget also collects live updates while open and reports a failed history request. Network throughput needs at least two valid counter updates. Individual drive capacities display in decimal GB or TB, while array usage displays in GiB.
+
+For denser CPU, RAM and network readings, open **Settings → Devices & services → Buffalo TeraStation NAS → Configure** in Home Assistant and set the scan interval to **10 seconds**. The default is 60 seconds. Integration **2.1.1** records each monitoring poll even when a value stays unchanged. Short CPU spikes between polls may still be missed.
+
+The NAS web interface has its own short live graph. Its graph starts collecting when that page opens and has a different sampling frequency from Home Assistant.
 
 ## Build and validate locally
 
