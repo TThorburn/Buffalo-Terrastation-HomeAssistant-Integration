@@ -9,7 +9,7 @@ Monitor a Buffalo TeraStation directly from Home Assistant through its local web
 - CPU and memory utilization
 - Used space, total capacity, usage percentage and health for each RAID array
 - Health for each SATA drive
-- Receive and transmit byte counters for each reported network interface
+- Receive and transmit byte counters and transfer speeds for each reported network interface
 - Active NAS errors and a count of informational events when the firmware exposes them
 
 ## Install and connect
@@ -18,7 +18,9 @@ Use Home Assistant 2024.12 or later. Add this repository as a custom integration
 
 Enter the address you use to open the NAS web interface and the credentials for an account that can read the dashboard. Use the full URL for HTTP, for example `http://192.168.1.10`. A bare IP or hostname uses HTTPS. HTTPS certificate verification defaults to enabled for new installations. If your NAS uses HTTP, its credentials and telemetry travel in clear text over the local network.
 
-Use **Configure** to change the polling interval, which defaults to 60 seconds. Use **Reconfigure** in the integration's menu to change its address, credentials or TLS settings. Home Assistant prompts for credentials when the NAS rejects the login.
+Use **Configure** to change the independent polling intervals. CPU and memory default to 10 seconds, network to 1 second, and storage and alerts to 60 seconds. Existing storage interval settings carry over. Network transfer speeds use the actual elapsed time between counter readings and become available after two successful polls. A counter reset or polling failure clears the rate baseline.
+
+Use **Reconfigure** in the integration's menu to change its address, credentials or TLS settings. Home Assistant prompts for credentials when the NAS rejects the login.
 
 ## Upgrade from 1.x
 

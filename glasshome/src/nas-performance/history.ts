@@ -1,6 +1,6 @@
 import { nonnegative, percent } from "../format";
 
-export type Sample = { timestamp: number; state: string };
+export type Sample = { timestamp: number; state: string; rate?: number };
 export type Point = { time: number; value: number | undefined };
 
 export function mergeSamples(samples: Sample[], since: number): Sample[] {
@@ -19,6 +19,7 @@ export function historyPoints(
   const points = ordered.flatMap((item, index) => {
     if (counter) {
       if (item.timestamp < since) return [];
+      if ("rate" in item) return [{ time: item.timestamp, value: item.rate }];
       const previous = ordered[index - 1];
       const from = nonnegative(previous?.state);
       const to = nonnegative(item.state);
@@ -36,6 +37,15 @@ export function historyPoints(
     points.push({ time: until, value: last.value });
   }
   return points;
+}
+
+export function byteScale(unit: string | null | undefined): number | undefined {
+  const units: Record<string, number> = {
+    B: 1, kB: 1000, MB: 1e6, GB: 1e9, TB: 1e12,
+    KiB: 1024, MiB: 1024 ** 2, GiB: 1024 ** 3, TiB: 1024 ** 4,
+    bit: 1 / 8, kbit: 1000 / 8, Mbit: 1e6 / 8, Gbit: 1e9 / 8,
+  };
+  return units[(unit ?? "B").replace(/\/s$/, "")];
 }
 
 export function chartStart(series: Point[][], earliest: number, end: number): number {

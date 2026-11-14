@@ -6,12 +6,13 @@ import { createEffect, createMemo, createSignal, onCleanup, onMount, Show, untra
 
 import { compactNumber, nonnegative, percent } from "../format";
 import manifest from "./manifest.json";
-import { chartStart, historyPoints, line, mergeSamples, type Point, type Sample } from "./history";
+import { byteScale, chartStart, historyPoints, line, mergeSamples, type Point, type Sample } from "./history";
 import "../tile.css";
 import "./performance.css";
 
 const HOURS = 6;
 const WINDOW = HOURS * 3600;
+const NETWORK_WINDOW = 5 * 60;
 
 const configSchema = defineConfig({
   title: field.title(),
@@ -23,27 +24,35 @@ const configSchema = defineConfig({
 
 type Config = Infer<typeof configSchema>;
 
-function series(id: Accessor<string>, now: Accessor<number>, counter = false) {
+function series(id: Accessor<string>, now: Accessor<number>, counter = false, span = WINDOW) {
   const current = useEntity(id);
   const history = useEntityHistory(id);
   const [samples, setSamples] = createSignal<Sample[]>([]);
   const [requestFailed, setRequestFailed] = createSignal(false);
+  const [historyError, setHistoryError] = createSignal("");
   createEffect(() => {
     const selected = id();
     setSamples([]);
     setRequestFailed(false);
+    setHistoryError("");
     if (!selected) return;
     let active = true;
     void untrack(() => trackEntityHistory(selected, {
-      startTime: new Date((Date.now() / 1000 - WINDOW) * 1000),
+      startTime: new Date((Date.now() / 1000 - span) * 1000),
       includeStartTimeState: true,
       significantChangesOnly: false,
       minimalResponse: true,
       noAttributes: true,
     })).then((result) => {
-      if (active) setRequestFailed(!!result.error);
-    }).catch(() => {
-      if (active) setRequestFailed(true);
+      if (active) {
+        setRequestFailed(!!result.error);
+        setHistoryError(result.error?.message ?? "");
+      }
+    }).catch((error: unknown) => {
+      if (active) {
+        setRequestFailed(true);
+        setHistoryError(error instanceof Error ? error.message : "History request failed");
+      }
     });
     onCleanup(() => {
       active = false;
@@ -54,22 +63,47 @@ function series(id: Accessor<string>, now: Accessor<number>, counter = false) {
     const selected = id();
     const entity = current();
     if (!selected || !entity) return;
-    const timestamp = entity.lastUpdated.getTime() / 1000;
+    const sampled = nonnegative(entity.attributes.sampled_at);
+    const timestamp = sampled ?? entity.lastUpdated.getTime() / 1000;
     if (!Number.isFinite(timestamp)) return;
+    const value = nonnegative(entity.state);
+    const scale = counter ? byteScale(entity.unitOfMeasurement) : 1;
+    const normalized = value !== undefined && scale !== undefined ? value * scale : undefined;
+    const rateSensor = counter && entity.unitOfMeasurement?.endsWith("/s");
+    const sample: Sample = {
+      timestamp, state: normalized === undefined ? "unavailable" : String(normalized),
+    };
+    if (counter && (sampled !== undefined || rateSensor)) {
+      sample.rate = normalized === undefined ? undefined : rateSensor
+        ? normalized : nonnegative(entity.attributes.bytes_per_second);
+    }
     setSamples((previous) => mergeSamples(
-      [...previous, { timestamp, state: entity.state }],
-      untrack(now) - WINDOW,
+      [...previous, sample],
+      untrack(now) - span,
     ));
   });
-  const readings = createMemo(() => mergeSamples(
-    [...(history()?.timeline ?? []), ...samples()], now() - WINDOW,
-  ));
+  const readings = createMemo(() => {
+    const entity = current();
+    const scale = counter ? byteScale(entity?.unitOfMeasurement) : 1;
+    const rateSensor = counter && entity?.unitOfMeasurement?.endsWith("/s");
+    const recorded = (history()?.timeline ?? []).map((sample): Sample => {
+      const value = nonnegative(sample.state);
+      const normalized = value !== undefined && scale !== undefined ? value * scale : undefined;
+      return {
+        timestamp: sample.timestamp,
+        state: normalized === undefined ? "unavailable" : String(normalized),
+        ...(rateSensor ? {rate: normalized} : {}),
+      };
+    });
+    return mergeSamples([...recorded, ...samples()], now() - span);
+  });
   return {
     current,
     failed: () => requestFailed() || !!history()?.error,
-    recorded: () => historyPoints(readings(), now() - WINDOW, counter),
+    error: () => historyError() || history()?.error?.message,
+    recorded: () => historyPoints(readings(), now() - span, counter),
     points: createMemo(() => historyPoints(
-      readings(), now() - WINDOW, counter, now(),
+      readings(), now() - span, counter, now(),
     )),
   };
 }
@@ -138,14 +172,14 @@ function Performance(props: { config: Config }) {
   const [now, setNow] = createSignal(Date.now() / 1000);
   const start = () => now() - WINDOW;
   onMount(() => {
-    const timer = setInterval(() => setNow(Date.now() / 1000), 30_000);
+    const timer = setInterval(() => setNow(Date.now() / 1000), 1_000);
     onCleanup(() => clearInterval(timer));
   });
 
   const cpu = series(() => props.config.cpu?.[0] ?? "", now);
   const memory = series(() => props.config.memory?.[0] ?? "", now);
-  const rx = series(() => props.config.rx?.[0] ?? "", now, true);
-  const tx = series(() => props.config.tx?.[0] ?? "", now, true);
+  const rx = series(() => props.config.rx?.[0] ?? "", now, true, NETWORK_WINDOW);
+  const tx = series(() => props.config.tx?.[0] ?? "", now, true, NETWORK_WINDOW);
   const stats = createMemo(() => chartStats(cpu.recorded()));
   const chartEnd = () => Math.max(
     now(),
@@ -173,7 +207,7 @@ function Performance(props: { config: Config }) {
               <PercentReading label="RAM" color="var(--nas-secondary)" value={percent(memory.current()?.state)} />
             </div>
             <Chart label="CPU and memory utilization history" start={start()} end={chartEnd()} max={100} primary={cpu.points()} secondary={memory.points()} />
-            <Show when={cpu.failed() || memory.failed()}><p class="nas-muted">Recorded history unavailable. Showing live updates while this tile is open.</p></Show>
+            <Show when={cpu.failed() || memory.failed()}><p class="nas-muted" title={cpu.error() || memory.error()}>Recorded history unavailable. Showing live updates while this tile is open.</p></Show>
             <Show when={stats()}>
               {(summary) => <div class="nas-row nas-muted nas-number">
                 <span>CPU min {compactNumber(summary().min)}%</span>
@@ -184,14 +218,14 @@ function Performance(props: { config: Config }) {
           </Show>
         </section>
         <section class="nas-section">
-          <div class="nas-section-title"><h3>Network Throughput</h3><span class="nas-muted">Latest sample</span></div>
+          <div class="nas-section-title"><h3>Network Throughput</h3><span class="nas-muted">Up to 5 min</span></div>
           <Show when={hasNetwork()} fallback={<p class="nas-muted">Select the RX and TX byte sensors for your active LAN port.</p>}>
             <div class="nas-legend">
               <Throughput label="RX" color="var(--nas-primary)" points={rx.points()} available={nonnegative(rx.current()?.state) !== undefined} />
               <Throughput label="TX" color="var(--nas-secondary)" points={tx.points()} available={nonnegative(tx.current()?.state) !== undefined} />
             </div>
-            <Chart label="Receive and transmit throughput history" start={start()} end={chartEnd()} max={rateScale()} primary={rx.points()} secondary={tx.points()} />
-            <Show when={rx.failed() || tx.failed()}><p class="nas-muted">Recorded history unavailable. Throughput needs two live counter updates.</p></Show>
+            <Chart label="Receive and transmit throughput history" start={now() - NETWORK_WINDOW} end={chartEnd()} max={rateScale()} primary={rx.points()} secondary={tx.points()} />
+            <Show when={rx.failed() || tx.failed()}><p class="nas-muted" title={rx.error() || tx.error()}>Recorded history unavailable. Showing live throughput while this tile is open.</p></Show>
           </Show>
         </section>
       </Widget.Content>

@@ -15,12 +15,16 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .client import BuffaloAuthError, BuffaloError, BuffaloNASClient
 from .const import (
+    CONF_CPU_SCAN_INTERVAL,
     CONF_DEVICE_IDENTIFIER,
+    CONF_NETWORK_SCAN_INTERVAL,
     CONF_SCAN_INTERVAL,
+    DEFAULT_CPU_SCAN_INTERVAL,
+    DEFAULT_NETWORK_SCAN_INTERVAL,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
 )
-from .models import Snapshot, read_snapshot
+from .models import NetworkSamples, Snapshot, read_snapshot
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -67,6 +71,15 @@ class BuffaloNASCoordinator(DataUpdateCoordinator[Snapshot]):
             model="TeraStation",
             configuration_url=str(self.client.url.with_path("/detail.html")),
         )
+        self.usage = BuffaloTelemetryCoordinator(
+            self, "usage", CONF_CPU_SCAN_INTERVAL, DEFAULT_CPU_SCAN_INTERVAL
+        )
+        self.network = BuffaloTelemetryCoordinator(
+            self,
+            "interfaces",
+            CONF_NETWORK_SCAN_INTERVAL,
+            DEFAULT_NETWORK_SCAN_INTERVAL,
+        )
 
     async def _async_setup(self) -> None:
         """Read device identity once per load."""
@@ -105,8 +118,48 @@ class BuffaloNASCoordinator(DataUpdateCoordinator[Snapshot]):
 
     async def _async_update_data(self) -> Snapshot:
         try:
-            return await read_snapshot(self.client)
+            return await read_snapshot(
+                self.client, ("devices", "errors", "information")
+            )
         except BuffaloAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except BuffaloError as err:
             raise UpdateFailed(str(err)) from err
+
+
+class BuffaloTelemetryCoordinator(DataUpdateCoordinator[Snapshot]):
+    """Poll one fast source without re-reading storage and alerts."""
+
+    config_entry: BuffaloConfigEntry
+
+    def __init__(
+        self, parent: BuffaloNASCoordinator, source: str, option: str, default: int
+    ) -> None:
+        super().__init__(
+            parent.hass,
+            _LOGGER,
+            config_entry=parent.config_entry,
+            name=f"{DOMAIN}_{source}",
+            update_interval=timedelta(
+                seconds=parent.config_entry.options.get(option, default)
+            ),
+            always_update=True,
+        )
+        self.client = parent.client
+        self.device_info = parent.device_info
+        self.data = Snapshot()
+        self._source = source
+        self._network_samples = NetworkSamples()
+
+    async def _async_update_data(self) -> Snapshot:
+        try:
+            data = await read_snapshot(self.client, (self._source,))
+        except BuffaloAuthError as err:
+            self._network_samples.reset()
+            raise ConfigEntryAuthFailed(str(err)) from err
+        except BuffaloError as err:
+            self._network_samples.reset()
+            raise UpdateFailed(str(err)) from err
+        if data.interfaces is not None:
+            self._network_samples.update(data.interfaces)
+        return data

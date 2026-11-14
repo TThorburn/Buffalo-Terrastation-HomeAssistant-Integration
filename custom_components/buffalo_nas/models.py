@@ -6,6 +6,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from math import isfinite
+from time import monotonic, time
 from typing import Any
 
 from .client import BuffaloAuthError, BuffaloError, BuffaloNASClient
@@ -90,18 +91,29 @@ def _indexed(result: Any, key: str, identifiers: tuple[str, ...]):
     return records if records or not rows else None
 
 
-async def read_snapshot(client: BuffaloNASClient) -> Snapshot:
+SOURCES = ("devices", "usage", "interfaces", "errors", "information")
+
+
+async def read_snapshot(
+    client: BuffaloNASClient, sources: tuple[str, ...] = SOURCES
+) -> Snapshot:
     """Poll read-only sources independently so partial responses remain useful."""
     await client.login()
 
-    requests = (
-        client.read("device.getlist", "device.get_list"),
-        client.read("get_cpu_mem_info", "getcpumeminfo", apply_log_output=False),
-        client.read("network.list_interface_settings", "network.listinterfacesettings"),
-        client.read("get_errors", "geterrors"),
-        client.read("get_informations", "getinformations"),
+    requests = {
+        "devices": lambda: client.read("device.getlist", "device.get_list"),
+        "usage": lambda: client.read(
+            "get_cpu_mem_info", "getcpumeminfo", apply_log_output=False
+        ),
+        "interfaces": lambda: client.read(
+            "network.list_interface_settings", "network.listinterfacesettings"
+        ),
+        "errors": lambda: client.read("get_errors", "geterrors"),
+        "information": lambda: client.read("get_informations", "getinformations"),
+    }
+    results = await asyncio.gather(
+        *(requests[source]() for source in sources), return_exceptions=True
     )
-    results = await asyncio.gather(*requests, return_exceptions=True)
     for index, result in enumerate(results):
         if isinstance(result, BuffaloAuthError):
             raise result
@@ -111,7 +123,12 @@ async def read_snapshot(client: BuffaloNASClient) -> Snapshot:
         elif isinstance(result, BaseException):
             raise result
 
-    devices, usage, interfaces, errors, information = results
+    values = dict(zip(sources, results, strict=True))
+    devices = values.get("devices")
+    usage = values.get("usage")
+    interfaces = values.get("interfaces")
+    errors = values.get("errors")
+    information = values.get("information")
     data = Snapshot(
         devices=_indexed(devices, "devices", ("device_file", "device_id")),
         usage=usage
@@ -125,8 +142,50 @@ async def read_snapshot(client: BuffaloNASClient) -> Snapshot:
         errors=errors if isinstance(errors, list) else None,
         information=information if isinstance(information, list) else None,
     )
-    if all(group is None for group in (data.devices, data.usage, data.interfaces)):
+    if all(getattr(data, source) is None for source in sources):
         raise BuffaloError(
-            "NAS returned no usable storage, utilization or network data"
+            "NAS returned no usable data for the requested monitoring sources"
         )
     return data
+
+
+class NetworkSamples:
+    """Calculate rates from counter differences and actual elapsed time."""
+
+    def __init__(self) -> None:
+        self._previous: dict[str, tuple[float, dict]] = {}
+
+    def reset(self) -> None:
+        self._previous.clear()
+
+    def update(self, interfaces: dict[str, dict]) -> None:
+        sampled = monotonic()
+        timestamp = time()
+        previous, self._previous = self._previous, {}
+        for name, interface in interfaces.items():
+            counters = {
+                "rx": next(
+                    (
+                        value
+                        for key in ("recevied_bytes", "received_bytes", "rx_bytes")
+                        if (value := number(interface.get(key))) is not None
+                    ),
+                    None,
+                ),
+                "tx": number(interface.get("sent_bytes", interface.get("tx_bytes"))),
+            }
+            old_time, old_counters = previous.get(name, (sampled, {}))
+            elapsed = sampled - old_time
+            interface["sampled_at"] = timestamp
+            for direction, value in counters.items():
+                before = old_counters.get(direction)
+                rate = None
+                if (
+                    elapsed > 0
+                    and value is not None
+                    and before is not None
+                    and value >= before
+                ):
+                    rate = (value - before) / elapsed
+                interface[f"{direction}_bytes_per_second"] = rate
+            self._previous[name] = (sampled, counters)

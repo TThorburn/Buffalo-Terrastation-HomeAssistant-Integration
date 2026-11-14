@@ -10,7 +10,12 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfInformation
+from homeassistant.const import (
+    PERCENTAGE,
+    EntityCategory,
+    UnitOfDataRate,
+    UnitOfInformation,
+)
 
 from .entity import BuffaloEntity, discover_entities
 from .models import Snapshot, arrays, number, percentage
@@ -70,6 +75,20 @@ def received(record: dict[str, Any]) -> int | float | None:
     return None
 
 
+def rx_attributes(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "sampled_at": record.get("sampled_at"),
+        "bytes_per_second": record.get("rx_bytes_per_second"),
+    }
+
+
+def tx_attributes(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "sampled_at": record.get("sampled_at"),
+        "bytes_per_second": record.get("tx_bytes_per_second"),
+    }
+
+
 @dataclass(frozen=True, kw_only=True)
 class Metric(SensorEntityDescription):
     """A value and its Home Assistant metadata."""
@@ -127,6 +146,7 @@ RX = Metric(
     native_unit_of_measurement=UnitOfInformation.BYTES,
     state_class=SensorStateClass.TOTAL_INCREASING,
     value=received,
+    attributes=rx_attributes,
 )
 TX = Metric(
     key="tx_bytes",
@@ -136,6 +156,27 @@ TX = Metric(
     native_unit_of_measurement=UnitOfInformation.BYTES,
     state_class=SensorStateClass.TOTAL_INCREASING,
     value=lambda data: number(data.get("sent_bytes", data.get("tx_bytes"))),
+    attributes=tx_attributes,
+)
+RX_RATE = Metric(
+    key="rx_rate",
+    name="Receive Speed",
+    icon="mdi:download-network",
+    device_class=SensorDeviceClass.DATA_RATE,
+    native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
+    state_class=SensorStateClass.MEASUREMENT,
+    value=lambda data: data.get("rx_bytes_per_second"),
+    attributes=rx_attributes,
+)
+TX_RATE = Metric(
+    key="tx_rate",
+    name="Transmit Speed",
+    icon="mdi:upload-network",
+    device_class=SensorDeviceClass.DATA_RATE,
+    native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
+    state_class=SensorStateClass.MEASUREMENT,
+    value=lambda data: data.get("tx_bytes_per_second"),
+    attributes=tx_attributes,
 )
 EVENTS = Metric(
     key="information",
@@ -163,7 +204,12 @@ class BuffaloSensor(BuffaloEntity, SensorEntity):
         self.entity_description = metric
         # Preserve each monitoring sample even when CPU, RAM or counters are flat.
         self._attr_force_update = metric.key in {
-            "cpu_usage", "memory_usage", "rx_bytes", "tx_bytes"
+            "cpu_usage",
+            "memory_usage",
+            "rx_bytes",
+            "tx_bytes",
+            "rx_rate",
+            "tx_rate",
         }
         self._source = source
 
@@ -187,13 +233,18 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
     """Discover interfaces and arrays as the NAS reports them."""
     coordinator = entry.runtime_data
 
-    def entities():
-        data = coordinator.data
+    def usage_entities():
+        usage_coordinator = coordinator.usage
         for metric in (CPU, MEMORY):
             yield (
-                BuffaloSensor(coordinator, metric, lambda snapshot: snapshot.usage),
+                BuffaloSensor(
+                    usage_coordinator, metric, lambda snapshot: snapshot.usage
+                ),
                 f"buffalo_{metric.key}",
             )
+
+    def storage_entities():
+        data = coordinator.data
         if data.information is not None:
             yield (
                 BuffaloSensor(
@@ -216,17 +267,28 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
                     if index == 0 and metric is RAID_USAGE
                     else None,
                 )
-        for key in data.interfaces or {}:
-            for metric in (RX, TX):
+
+    def network_entities():
+        network_coordinator = coordinator.network
+        for key in network_coordinator.data.interfaces or {}:
+            for metric in (RX, TX, RX_RATE, TX_RATE):
                 yield (
                     BuffaloSensor(
-                        coordinator,
+                        network_coordinator,
                         metric,
                         lambda snap, key=key: (snap.interfaces or {}).get(key),
                         f"network:{key}:",
                         f"{key} ",
                     ),
-                    f"buffalo_{key}_{metric.key}" if key == "eth0" else None,
+                    f"buffalo_{key}_{metric.key}"
+                    if key == "eth0" and metric in (RX, TX)
+                    else None,
                 )
 
-    discover_entities(entry, "sensor", async_add_entities, entities)
+    discover_entities(entry, "sensor", async_add_entities, storage_entities)
+    discover_entities(
+        entry, "sensor", async_add_entities, usage_entities, coordinator.usage
+    )
+    discover_entities(
+        entry, "sensor", async_add_entities, network_entities, coordinator.network
+    )

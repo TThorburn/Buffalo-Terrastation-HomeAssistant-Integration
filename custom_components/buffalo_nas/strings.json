@@ -46,7 +46,9 @@
       "init": {
         "title": "Buffalo NAS polling",
         "data": {
-          "scan_interval": "Scan interval (seconds)"
+          "scan_interval": "Storage and alerts interval (seconds)",
+          "cpu_scan_interval": "CPU and memory interval (seconds)",
+          "network_scan_interval": "Network interval (seconds)"
         }
       }
     }

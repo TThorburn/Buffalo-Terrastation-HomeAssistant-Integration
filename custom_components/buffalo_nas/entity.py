@@ -7,15 +7,26 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import BuffaloConfigEntry, BuffaloNASCoordinator
+from .coordinator import (
+    BuffaloConfigEntry,
+    BuffaloNASCoordinator,
+    BuffaloTelemetryCoordinator,
+)
 
 
-class BuffaloEntity(CoordinatorEntity[BuffaloNASCoordinator]):
+class BuffaloEntity(
+    CoordinatorEntity[BuffaloNASCoordinator | BuffaloTelemetryCoordinator]
+):
     """An entity associated with a single NAS."""
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: BuffaloNASCoordinator, key: str, name: str) -> None:
+    def __init__(
+        self,
+        coordinator: BuffaloNASCoordinator | BuffaloTelemetryCoordinator,
+        key: str,
+        name: str,
+    ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}:{key}"
         self._attr_name = name
@@ -28,9 +39,10 @@ def discover_entities(
     platform: str,
     async_add_entities,
     build_entities: Callable[[], Iterable[tuple[BuffaloEntity, str | None]]],
+    coordinator: BuffaloNASCoordinator | BuffaloTelemetryCoordinator | None = None,
 ) -> None:
     """Add new entities and attach old registry IDs before their first registration."""
-    coordinator = entry.runtime_data
+    coordinator = coordinator or entry.runtime_data
     registry = er.async_get(coordinator.hass)
     known: set[str] = set()
 

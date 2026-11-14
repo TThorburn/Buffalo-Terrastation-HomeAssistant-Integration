@@ -13,8 +13,12 @@ from homeassistant.helpers.selector import (
 
 from .client import BuffaloAuthError, BuffaloError, base_url
 from .const import (
+    CONF_CPU_SCAN_INTERVAL,
     CONF_DEVICE_IDENTIFIER,
+    CONF_NETWORK_SCAN_INTERVAL,
     CONF_SCAN_INTERVAL,
+    DEFAULT_CPU_SCAN_INTERVAL,
+    DEFAULT_NETWORK_SCAN_INTERVAL,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MAX_SCAN_INTERVAL,
@@ -162,6 +166,22 @@ class BuffaloNASOptionsFlow(config_entries.OptionsFlow):
                     ): vol.All(
                         vol.Coerce(int),
                         vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
+                    ),
+                    vol.Required(
+                        CONF_CPU_SCAN_INTERVAL,
+                        default=self.config_entry.options.get(
+                            CONF_CPU_SCAN_INTERVAL, DEFAULT_CPU_SCAN_INTERVAL
+                        ),
+                    ): vol.All(
+                        vol.Coerce(int), vol.Range(min=10, max=MAX_SCAN_INTERVAL)
+                    ),
+                    vol.Required(
+                        CONF_NETWORK_SCAN_INTERVAL,
+                        default=self.config_entry.options.get(
+                            CONF_NETWORK_SCAN_INTERVAL, DEFAULT_NETWORK_SCAN_INTERVAL
+                        ),
+                    ): vol.All(
+                        vol.Coerce(int), vol.Range(min=1, max=MAX_SCAN_INTERVAL)
                     ),
                 }
             ),
